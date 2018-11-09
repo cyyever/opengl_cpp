@@ -2,18 +2,18 @@
 
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <set>
 #include <sstream>
 #include <stdexcept>
-#include <string_view>
 #include <tuple>
 
-#include "buffer.hpp"
 #include "error.hpp"
 #include "texture.hpp"
+#include "uniform_buffer.hpp"
 #include "vertex_array.hpp"
 
 namespace opengl {
@@ -33,7 +33,16 @@ public:
   program(program &&) noexcept = delete;
   program &operator=(program &&) noexcept = delete;
 
-  ~program() noexcept = default;
+  ~program() noexcept {
+    for (auto const &[block_name, _] : uniform_blocks) {
+      auto it = cross_program_uniform_blocks.find(block_name);
+      if (it != cross_program_uniform_blocks.end()) {
+        if (it->second.use_count() == 1) {
+          cross_program_uniform_blocks.erase(it);
+        }
+      }
+    }
+  }
 
   bool attach_shader_file(GLenum shader_type,
                           std::filesystem::path source_code) noexcept {
@@ -224,6 +233,34 @@ public:
     VAO = std::move(array);
   }
 
+  template <typename... value_types>
+  bool set_uniform_variable_in_block(const std::string &block_name,
+                                     const std::string &variable_name,
+                                     value_types &&... values) noexcept {
+    static_assert(sizeof...(values) != 0, "no value specified");
+    using first_value_type =
+        typename std::tuple_element<0, std::tuple<value_types...>>::type;
+    static_assert(
+        std::conjunction_v<std::is_same<first_value_type, value_types>...>,
+        "values should be the same type");
+
+    using real_value_type = typename std::remove_const<
+        typename std::remove_reference<first_value_type>::type>::type;
+
+    if constexpr (sizeof...(values) == 1) {
+      auto &&value = std::get<0>(
+          std::forward_as_tuple(std::forward<value_types>(values)...));
+      if constexpr (std::is_same_v<real_value_type, glm::mat4>) {
+        return set_uniform_variable_in_block_by_callback(
+            block_name, variable_name, [&value](auto &UBO, auto offset) {
+              return UBO.write(std::forward<decltype(value)>(value), offset);
+            });
+      }
+    }
+    std::cerr << "unsupported value types" << std::endl;
+    return false;
+  }
+
 private:
   bool link() {
     if (!linked) {
@@ -277,6 +314,84 @@ private:
     return true;
   }
 
+  bool set_uniform_variable_in_block_by_callback(
+      const std::string &block_name, const std::string &variable_name,
+      std::function<void(opengl::uniform_buffer &UBO, GLint offset)>
+          set_function) noexcept {
+    if (!install()) {
+      return false;
+    }
+
+    auto UBO_ptr = get_uniform_block(block_name);
+    if (!UBO_ptr) {
+      return false;
+    }
+
+    GLuint index = 0;
+    auto variable_name_ptr = variable_name.c_str();
+    glGetUniformIndices(*program_id, 1, &variable_name_ptr, &index);
+    if (check_error()) {
+      std::cerr << "glGetUniformIndices failed:" << variable_name << std::endl;
+      return false;
+    }
+
+    GLint offset = -1;
+    glGetActiveUniformsiv(*program_id, 1, &index, GL_UNIFORM_OFFSET, &offset);
+    if (check_error()) {
+      std::cerr << "get GL_UNIFORM_OFFSET failed:" << variable_name
+                << std::endl;
+      return false;
+    }
+
+    set_function(*UBO_ptr, offset);
+    if (check_error()) {
+      std::cerr << "set_function failed:" << variable_name << std::endl;
+      return false;
+    }
+    assigned_uniform_variables.insert(variable_name);
+    return true;
+  }
+
+  std::shared_ptr<::opengl::uniform_buffer>
+  get_uniform_block(const std::string &block_name) noexcept {
+    if (!install()) {
+      return {};
+    }
+
+    auto block_index = glGetUniformBlockIndex(*program_id, block_name.c_str());
+    if (block_index == GL_INVALID_INDEX) {
+      std::cerr << "glGetUniformBlockIndex failed" << std::endl;
+      return {};
+    }
+
+    if (auto it = uniform_blocks.find(block_name); it != uniform_blocks.end()) {
+      return it->second;
+    }
+
+    auto it = cross_program_uniform_blocks.find(block_name);
+    if (it != cross_program_uniform_blocks.end()) {
+      auto UBO_ptr = it->second.lock();
+      if (UBO_ptr) {
+        return UBO_ptr;
+      }
+    }
+
+    GLint data_size = 0;
+    glGetActiveUniformBlockiv(*program_id, block_index,
+                              GL_UNIFORM_BLOCK_DATA_SIZE, &data_size);
+    if (check_error()) {
+      std::cerr << "glGetActiveUniformBlockiv failed" << std::endl;
+      return {};
+    }
+    assert(data_size > 0);
+
+    auto [it2, _] = uniform_blocks.emplace(
+        block_name, std::make_shared<opengl::uniform_buffer>(
+                        static_cast<size_t>(data_size)));
+    it->second = it2->second;
+    return it2->second;
+  }
+
 private:
   std::unique_ptr<GLuint, std::function<void(GLuint *)>> program_id{
       new GLuint(0), [](auto ptr) {
@@ -289,6 +404,9 @@ private:
            std::vector<std::unique_ptr<GLuint, std::function<void(GLuint *)>>>>
       shaders;
   std::optional<::opengl::vertex_array> VAO;
+  std::map<std::string, std::shared_ptr<opengl::uniform_buffer>> uniform_blocks;
+  inline static std::map<std::string, std::weak_ptr<opengl::uniform_buffer>>
+      cross_program_uniform_blocks;
   bool linked{false};
 };
 } // namespace opengl

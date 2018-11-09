@@ -20,11 +20,11 @@ public:
 
   template <size_t N> bool write(const data_type (&data)[N]) noexcept {
     static_assert(N != 0, "can't write empty array");
-    return write_span(gsl::span<const data_type>(data));
+    return write_all(gsl::span<const data_type>(data));
   }
 
   template <typename T> bool write(const std::vector<T> &data) noexcept {
-    return write_span(gsl::span<const T>(data.data(), data.size()));
+    return write_all(gsl::span<const T>(data.data(), data.size()));
   }
 
   bool vertex_attribute_pointer_simple_offset(GLuint index, GLint size,

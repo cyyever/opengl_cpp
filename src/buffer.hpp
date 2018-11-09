@@ -33,7 +33,55 @@ public:
   virtual ~buffer() noexcept = default;
 
 protected:
-  template <typename T> bool write_span(gsl::span<const T> data_view) noexcept {
+  bool alloc(size_t size) noexcept {
+    if (size == 0) {
+      std::cerr << "can't alloc 0 bytes" << std::endl;
+      return false;
+    }
+
+    if constexpr (opengl::context::gl_minor_version < 5) {
+      if (!bind()) {
+        return false;
+      }
+    }
+    if constexpr (opengl::context::gl_minor_version < 5) {
+      glBufferData(target, size, nullptr, GL_STATIC_DRAW);
+    } else {
+      glNamedBufferData(*buffer_id, size, nullptr, GL_STATIC_DRAW);
+    }
+    if (check_error()) {
+      std::cerr << "glBufferData failed" << std::endl;
+      return false;
+    }
+    return true;
+  }
+
+  template <typename T>
+  bool write_part(gsl::span<const T> data_view, GLintptr offset) noexcept {
+    if (data_view.empty()) {
+      std::cerr << "can't write empty data" << std::endl;
+      return false;
+    }
+
+    if constexpr (opengl::context::gl_minor_version < 5) {
+      if (!bind()) {
+        return false;
+      }
+    }
+    if constexpr (opengl::context::gl_minor_version < 5) {
+      glBufferSubData(target, offset, data_view.size_bytes(), data_view.data());
+    } else {
+      glNamedBufferSubData(*buffer_id, offset, data_view.size_bytes(),
+                           data_view.data());
+    }
+    if (check_error()) {
+      std::cerr << "glBufferSubData failed" << std::endl;
+      return false;
+    }
+    return true;
+  }
+
+  template <typename T> bool write_all(gsl::span<const T> data_view) noexcept {
     if (data_view.empty()) {
       std::cerr << "can't write empty data" << std::endl;
       return false;
