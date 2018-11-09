@@ -6,7 +6,8 @@
 #include <stdexcept>
 #include <vector>
 
-#include "buffer.hpp"
+#include "array_buffer.hpp"
+#include "element_array_buffer.hpp"
 #include "error.hpp"
 #include "program.hpp"
 #include "texture.hpp"
@@ -43,8 +44,8 @@ private:
   std::vector<GLuint> indices;
   std::map<texture_2D::type, std::vector<opengl::texture_2D>> textures;
   opengl::vertex_array VAO{true};
-  opengl::buffer<GL_ARRAY_BUFFER, float> VBO;
-  opengl::buffer<GL_ELEMENT_ARRAY_BUFFER, GLuint> EBO;
+  opengl::array_buffer<float> VBO;
+  opengl::element_array_buffer<GLuint> EBO;
 };
 
 } // namespace opengl

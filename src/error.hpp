@@ -42,7 +42,7 @@ private:
 std::optional<GLenum>
 check_error(source_location error_location = source_location::current());
 
-inline void throw_exception[[noreturn]](const std::string &what_arg) {
+inline void throw_exception [[noreturn]] (const std::string &what_arg) {
   std::cerr << what_arg << std::endl;
   throw std::runtime_error(what_arg);
 }

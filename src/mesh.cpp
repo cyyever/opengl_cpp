@@ -19,7 +19,7 @@ mesh::mesh(
     throw_exception("EBO write failed");
   }
 
-  if (!EBO.bind()) {
+  if (!EBO.use()) {
     throw_exception("use EBO failed");
   }
 

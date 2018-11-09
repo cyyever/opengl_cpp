@@ -5,8 +5,8 @@
 #include <gsl/gsl>
 #include <iostream>
 #include <memory>
-#include <stdexcept>
 #include <stb_image.h>
+#include <stdexcept>
 
 #include "error.hpp"
 
