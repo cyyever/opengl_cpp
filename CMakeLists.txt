@@ -14,7 +14,7 @@ IF(NOT glad_binary)
 ENDIF()
 
 SET(glad_DIR ${CMAKE_CURRENT_BINARY_DIR}/glad)
-ADD_CUSTOM_COMMAND(OUTPUT ${glad_DIR}/src/glad.c COMMAND ${glad_binary} --no-loader --reproducible --profile core --generator=c --spec gl --out-path=${glad_DIR})
+ADD_CUSTOM_COMMAND(OUTPUT ${glad_DIR}/src/glad.c COMMAND ${glad_binary} --omit-khrplatform --no-loader --reproducible --profile core --generator=c --spec gl --out-path=${glad_DIR})
 FIND_LIBRARY(cxxfs_lib NAMES stdc++fs PATHS /usr/lib/gcc/x86_64-linux-gnu/8/)
 
 FILE(GLOB HRDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp)
