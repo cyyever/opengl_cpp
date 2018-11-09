@@ -13,6 +13,7 @@
 
 #include "buffer.hpp"
 #include "error.hpp"
+#include "vertex_array.hpp"
 #include "texture.hpp"
 
 namespace opengl {
