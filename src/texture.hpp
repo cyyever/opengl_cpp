@@ -6,9 +6,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
-#undef STB_IMAGE_IMPLEMENTATION
 
 #include "error.hpp"
 

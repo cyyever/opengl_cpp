@@ -64,8 +64,7 @@ public:
       return false;
     }
 
-    if constexpr (target == GL_ELEMENT_ARRAY_BUFFER ||
-                  opengl::context::gl_minor_version < 5) {
+    if constexpr (opengl::context::gl_minor_version < 5) {
       if (!bind()) {
         return false;
       }
@@ -118,7 +117,7 @@ public:
     return true;
   }
 
-private:
+public:
   bool bind() noexcept {
     glBindBuffer(target, *buffer_id);
     if (check_error()) {
