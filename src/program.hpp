@@ -30,8 +30,8 @@ public:
   program(const program &) = delete;
   program &operator=(const program &) = delete;
 
-  program(program &&) noexcept = delete;
-  program &operator=(program &&) noexcept = delete;
+  program(program &&) = default;
+  program &operator=(program &&) = default;
 
   ~program() noexcept {
     for (auto const &[block_name, _] : uniform_blocks) {
@@ -234,9 +234,9 @@ public:
   }
 
   template <typename... value_types>
-  bool set_uniform_variable_in_block(const std::string &block_name,
-                                     const std::string &variable_name,
-                                     value_types &&... values) noexcept {
+  bool set_uniform_of_block(const std::string &block_name,
+                            const std::string &variable_name,
+                            value_types &&... values) noexcept {
     static_assert(sizeof...(values) != 0, "no value specified");
     using first_value_type =
         typename std::tuple_element<0, std::tuple<value_types...>>::type;
@@ -251,7 +251,7 @@ public:
       auto &&value = std::get<0>(
           std::forward_as_tuple(std::forward<value_types>(values)...));
       if constexpr (std::is_same_v<real_value_type, glm::mat4>) {
-        return set_uniform_variable_in_block_by_callback(
+        return set_uniform_of_block_by_callback(
             block_name, variable_name, [&value](auto &UBO, auto offset) {
               return UBO.write(std::forward<decltype(value)>(value), offset);
             });
@@ -314,7 +314,7 @@ private:
     return true;
   }
 
-  bool set_uniform_variable_in_block_by_callback(
+  bool set_uniform_of_block_by_callback(
       const std::string &block_name, const std::string &variable_name,
       std::function<void(opengl::uniform_buffer &UBO, GLint offset)>
           set_function) noexcept {
