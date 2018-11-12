@@ -65,7 +65,9 @@ public:
 
     std::unique_ptr<GLuint, std::function<void(GLuint *)>> shader_id(
         new GLuint(0), [this](auto ptr) {
-          glDetachShader(*program_id, *ptr);
+          if (program_id) {
+            glDetachShader(*program_id, *ptr);
+          }
           glDeleteShader(*ptr);
           delete ptr;
         });
@@ -131,6 +133,44 @@ public:
       }
 
       next_texture_unit++;
+    }
+
+    auto block_names_opt = get_uniform_block_names();
+    if (!block_names_opt) {
+      return false;
+    }
+    for (auto const &block_name : block_names_opt.value()) {
+      if (uniform_blocks.count(block_name)) {
+        continue;
+      }
+      auto it = cross_program_uniform_blocks.find(block_name);
+      if (it == cross_program_uniform_blocks.end()) {
+        std::cerr << "uniform block\"" << block_name << "\" is not assigned"
+                  << std::endl;
+        return false;
+      }
+      uniform_blocks.insert(*it);
+    }
+
+    GLuint binding_point = 0;
+    for (const auto &[uniform_block_name, uniform_buffer] : uniform_blocks) {
+      auto block_index =
+          glGetUniformBlockIndex(*program_id, uniform_block_name.c_str());
+      if (block_index == GL_INVALID_INDEX) {
+        std::cerr << "glGetUniformBlockIndex failed" << std::endl;
+        return false;
+      }
+      glUniformBlockBinding(*program_id, block_index, binding_point);
+      if (check_error()) {
+        std::cerr << "glUniformBlockBinding failed" << std::endl;
+        return false;
+      }
+
+      if (!uniform_buffer->use(binding_point)) {
+        puts("fdsfds");
+        return false;
+      }
+      binding_point++;
     }
 
 #ifndef NDEBUG
@@ -291,6 +331,29 @@ private:
     return true;
   }
 
+  std::optional<std::vector<std::string>> get_uniform_block_names() noexcept {
+    GLint count = 0;
+    glGetProgramiv(*program_id, GL_ACTIVE_UNIFORM_BLOCKS, &count);
+    if (check_error()) {
+      std::cerr << "glGetProgramiv failed" << std::endl;
+      return {};
+    }
+
+    std::vector<std::string> block_names;
+    GLchar name[512];
+    for (GLint i = 0; i < count; i++) {
+      GLsizei size;
+      glGetActiveUniformBlockName(*program_id, static_cast<GLuint>(i),
+                                  sizeof(name), &size, name);
+      if (check_error()) {
+        std::cerr << "glGetActiveUniformBlockName failed" << std::endl;
+        return {};
+      }
+      block_names.push_back(name);
+    }
+    return block_names;
+  }
+
   bool check_uniform_assignment() noexcept {
     GLint count = 0;
     glGetProgramiv(*program_id, GL_ACTIVE_UNIFORMS, &count);
@@ -299,13 +362,25 @@ private:
       return false;
     }
 
+    auto assigned_total_uniform_variables = assigned_uniform_variables;
+
+    for (auto const &[block_name, _] : uniform_blocks) {
+      assigned_total_uniform_variables.insert(
+          assigned_uniform_variables_of_blocks[block_name].begin(),
+          assigned_uniform_variables_of_blocks[block_name].end());
+    }
+
     GLchar name[512];
     for (GLint i = 0; i < count; i++) {
       GLint size;
       GLenum type;
       glGetActiveUniform(*program_id, static_cast<GLuint>(i), sizeof(name),
                          nullptr, &size, &type, name);
-      if (assigned_uniform_variables.count(name) == 0) {
+      if (check_error()) {
+        std::cerr << "glGetActiveUniform failed" << std::endl;
+        return {};
+      }
+      if (assigned_total_uniform_variables.count(name) == 0) {
         std::cerr << "uniform variable \"" << name << "\" is not assigned"
                   << std::endl;
         return false;
@@ -348,7 +423,8 @@ private:
       std::cerr << "set_function failed:" << variable_name << std::endl;
       return false;
     }
-    assigned_uniform_variables.insert(variable_name);
+
+    assigned_uniform_variables_of_blocks[block_name].push_back(variable_name);
     return true;
   }
 
@@ -388,16 +464,11 @@ private:
     auto [it2, _] = uniform_blocks.emplace(
         block_name, std::make_shared<opengl::uniform_buffer>(
                         static_cast<size_t>(data_size)));
-    it->second = it2->second;
+    cross_program_uniform_blocks.emplace(block_name, it2->second);
     return it2->second;
   }
 
 private:
-  std::unique_ptr<GLuint, std::function<void(GLuint *)>> program_id{
-      new GLuint(0), [](auto ptr) {
-        glDeleteProgram(*ptr);
-        delete ptr;
-      }};
   std::set<std::string> assigned_uniform_variables;
   std::map<std::string, std::unique_ptr<::opengl::texture>> assigned_textures;
   std::map<GLenum,
@@ -407,6 +478,13 @@ private:
   std::map<std::string, std::shared_ptr<opengl::uniform_buffer>> uniform_blocks;
   inline static std::map<std::string, std::weak_ptr<opengl::uniform_buffer>>
       cross_program_uniform_blocks;
+  inline static std::map<std::string, std::vector<std::string>>
+      assigned_uniform_variables_of_blocks;
   bool linked{false};
+  std::unique_ptr<GLuint, std::function<void(GLuint *)>> program_id{
+      new GLuint(0), [](auto ptr) {
+        glDeleteProgram(*ptr);
+        delete ptr;
+      }};
 };
 } // namespace opengl

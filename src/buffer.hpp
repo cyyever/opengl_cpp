@@ -115,7 +115,7 @@ protected:
     return true;
   }
 
-private:
+protected:
   std::unique_ptr<GLuint, std::function<void(GLuint *)>> buffer_id{
       new GLuint(0), [](auto ptr) {
         glDeleteBuffers(1, ptr);

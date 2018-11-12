@@ -24,6 +24,19 @@ public:
   template <typename T> bool write(const T &data, GLintptr offset) noexcept {
     return write_part(gsl::span<const T>{&data, 1}, offset);
   }
+
+  bool use(GLuint binding_point) noexcept {
+    if (!bind()) {
+      return false;
+    }
+
+    glBindBufferBase(GL_UNIFORM_BUFFER, binding_point, *buffer_id);
+    if (check_error()) {
+      std::cerr << "glBindBufferBase failed" << std::endl;
+      return false;
+    }
+    return true;
+  }
 };
 
 } // namespace opengl
